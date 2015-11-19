@@ -9,7 +9,7 @@ LISTENING_EVENTS = "./scripts/listening-events.py"
 USER_FETCHER = "./scripts/user-fetcher.py"
 MINIMUM_USERS = 10
 
-UNIQUE_USERS = ./data/overall/unique_users_$(MINIMUM_USERS).csv
+UNIQUE_USERS = ./data/overall/unique_users_2000.csv
 
 all: paths users listening-events
 
