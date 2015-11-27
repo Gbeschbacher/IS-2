@@ -58,17 +58,17 @@ if __name__ == "__main__":
                 track = event["name"]
                 time = event["date"]["uts"]
 
-                LEs.append([user, artist.encode('utf8'), track.encode('utf8'), str(time)])
+                LEs.append([user, artist.encode("utf8"), track.encode("utf8"), str(time)])
                 uniqueArtists.append(artistID)
 
 
     filename = "listening_events_{0}.csv".format(len(LEs))
-    with open(pathToOverall + filename, 'w') as outfile:
-        outfile.write('user\tartist\ttrack\ttime\n')
+    with open(pathToOverall + filename, "w") as outfile:
+        outfile.write("user\tartist\ttrack\ttime\n")
         for le in LEs:
             outfile.write(le[0] + "\t" + le[1] + "\t" + le[2] + "\t" + le[3] + "\n")
 
     filename = "unique_artists_{0}.csv".format(len(uniqueArtists))
-    with open(pathToOverall + filename, 'w') as outfile:
+    with open(pathToOverall + filename, "w") as outfile:
         for uniqueArtist in uniqueArtists:
             outfile.write(uniqueArtist + "\n")

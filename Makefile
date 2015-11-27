@@ -7,9 +7,11 @@ BASE_USERS = "./data/base.csv"
 
 LISTENING_EVENTS = "./scripts/listening-events.py"
 USER_FETCHER = "./scripts/user-fetcher.py"
+CONVERTER_UAM = "./scripts/converter-uam.py"
 MINIMUM_USERS = 10
 
 UNIQUE_USERS = ./data/overall/unique_users_2000.csv
+LISTENING_EVENTS_F = ./data/overall/listening_events_34918.csv
 
 all: paths users listening-events
 
@@ -25,6 +27,10 @@ users:
 
 listening-events:
 	python $(LISTENING_EVENTS) $(UNIQUE_USERS) $(OVERALL)
+
+uam:
+	python $(CONVERTER_UAM) $(LISTENING_EVENTS_F) $(OVERALL)
+
 
 clean.users:
 	rm -rf ./$(USERS)
