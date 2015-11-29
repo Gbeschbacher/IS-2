@@ -17,15 +17,6 @@ def readFile(filename, header = False):
 
     return content
 
-#Fetch webpage
-def fetchWebPage(baseurl, query):
-    url = baseurl + urllib.quote(query)
-    try:
-        print "Retrieving data from " + url
-        return urllib.urlopen(url).read()
-    except IOError:
-        return "IOERror on fetching the webpage"
-
 #Reading a path on the os if it doesn't exist
 def createPath(path):
     if not os.path.exists(path):

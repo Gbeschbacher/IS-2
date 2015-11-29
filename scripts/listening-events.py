@@ -27,40 +27,37 @@ if __name__ == "__main__":
 
     users = helpers.readFile(pathToUniqueUsers, header = True)
 
-    for i, user in enumerate(users):
-        print "Processing LEs for user ", i
+    LEs = []
 
-        userContent = []
+    for user in range(0, len(users)):
+        print "Processing LEs for user ", user
 
-        for page in range(1,6):
-            content = lfm.call("user.getRecentTracks", params = {"user": user, "limit": 200, "page": page})
+        content = lfm.getLEs(users[user], 5, 200)
 
-            userContent.append(content)
-            listeningEventsTree = json.loads(content)
+        try:
+            # for all retrieved JSON pages of current user
+            for page in range(0, len(content)):
+                listening_events = json.loads(content[page])
 
-            if not checkEventTree(listeningEventsTree):
-                continue
+                # get number of listening events in current JSON
+                numberOfItems = 0
+                # catching possible bug when 0 tracks are returned by listening_events
+                if "recenttracks" in listening_events:
+                    if "track" in listening_events["recenttracks"]:
+                        numberOfItems = len(listening_events["recenttracks"]["track"])
+                print "number items: " + numberOfItems.__str__()
 
-            for event in listeningEventsTree["recenttracks"]["track"]:
-                artistID = event["artist"]["mbid"]
+                # read artist and track names for each
+                for item in range(0, numberOfItems):
+                    artist = listening_events["recenttracks"]["track"][item]["artist"]["#text"]
+                    track = listening_events["recenttracks"]["track"][item]["name"]
+                    time = listening_events["recenttracks"]["track"][item]["date"]["uts"]
 
-                if (artistID in uniqueArtists or artistID == ""):
-                    continue
+                    LEs.append([users[user], artist.encode('utf8'), track.encode('utf8'), str(time)])
 
-                if not "artist" in event:
-                    continue
-                if not "name" in event:
-                    continue
-                if not "date" in event:
-                    continue
-
-                artist = event["artist"]["#text"]
-                track = event["name"]
-                time = event["date"]["uts"]
-
-                LEs.append([user, artist.encode("utf8"), track.encode("utf8"), str(time)])
-                uniqueArtists.append(artistID)
-
+        except KeyError:                    # JSON tag not found
+            print "JSON tag not found!"
+            continue
 
     filename = "listening_events_{0}.csv".format(len(LEs))
     with open(pathToOverall + filename, "w") as outfile:

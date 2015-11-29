@@ -4,6 +4,81 @@ import csv
 import sys
 import numpy as np
 
+MIN_ARTISTS_COUNT_PER_USER = 10
+MIN_USER_COUNT_PER_ARTIST = 5
+
+def filter_out_users(users, artists, listening_events, min_artists_count):
+    anythingDeleted = False
+    usersToDelete = []
+    for user in users.keys():
+        artistCount = 0
+        for artist in artists.keys():
+            if((user, artist) in listening_events):
+                if(listening_events[(user, artist)] > 0):
+                    artistCount += 1
+        if(artistCount < min_artists_count):
+            usersToDelete.append(user)
+            for artist in artists.keys():
+                if((user, artist) in listening_events):
+                    del(listening_events[(user, artist)])
+
+    for user in usersToDelete:
+        del(users[user])
+        anythingDeleted = True
+
+    # remove all artists that no user is connected with at all
+    artistsToDelete = []
+    for artist in artists.keys():
+        removeArtist = True
+        for user in users.keys():
+            if (user, artist) in listening_events:
+                removeArtist = False
+                break
+        if(removeArtist):
+            artistsToDelete.append(artist)
+
+    for artist in artistsToDelete:
+        del(artists[artist])
+        anythingDeleted = True
+
+    return anythingDeleted
+
+def filter_out_artists(users, artists, listening_events, min_user_count):
+    anythingDeleted = False
+    artistsToDelete = []
+    for artist in artists.keys():
+        userCount = 0
+        for user in users.keys():
+            if((user, artist) in listening_events):
+                if(listening_events[(user, artist)] > 0):
+                    userCount += 1
+        if(userCount < min_user_count):
+            artistsToDelete.append(artist)
+            for user in users.keys():
+                if((user, artist) in listening_events):
+                    del(listening_events[(user, artist)])
+
+    for artist in artistsToDelete:
+        del(artists[artist])
+        anythingDeleted = True
+
+    # remove all users that no artists is connected with at all
+    usersToDelete = []
+    for user in users.keys():
+        removeUser = True
+        for artist in artists.keys():
+            if (user, artist) in listening_events:
+                removeUser = False
+                break
+        if(removeUser):
+            usersToDelete.append(user)
+
+    for user in usersToDelete:
+        del(users[user])
+        anythingDeleted = True
+
+    return  anythingDeleted
+
 if __name__ == "__main__":
 
     pathToListeningEvents = str(sys.argv[1])
@@ -53,6 +128,31 @@ if __name__ == "__main__":
             # increase listening counter for (user, artist) pair/tuple
             listening_events[(user, artist)] += 1
 
+    print "artist count: " + len(artists).__str__()
+    print "user count: " + len(users).__str__()
+    print "listenings count: " + len(listening_events).__str__()
+
+    count = 0
+    while(True):
+        count += 1
+        # filter out all artists wth less than "x" users
+        artistsDeleted = filter_out_artists(users, artists, listening_events, MIN_USER_COUNT_PER_ARTIST)
+
+        #print "artist count: " + len(artists).__str__()
+        #print "user count: " + len(users).__str__()
+        #print "listenings count: " + len(listening_events).__str__()
+
+        # filter out all users with less than "x" artists
+        usersDeleted = filter_out_users(users, artists, listening_events, MIN_ARTISTS_COUNT_PER_USER)
+
+        if(not artistsDeleted and not usersDeleted):
+            break
+
+    print ("filtering count: " + count.__str__())
+    print "artist count: " + len(artists).__str__()
+    print "user count: " + len(users).__str__()
+    print "listenings count: " + len(listening_events).__str__()
+
 
     # Assign a unique index to all artists and users in dictionary (we need these to create the UAM)
     counter = 0
@@ -85,26 +185,25 @@ if __name__ == "__main__":
                 continue
 
     # Get sum of play events per user and per artist
-    sum_pc_user = np.sum(UAM, axis=1)
-    sum_pc_artist = np.sum(UAM, axis=0)
+    # sum_pc_user = np.sum(UAM, axis=1)
+    # sum_pc_artist = np.sum(UAM, axis=0)
 
     # Normalize the UAM (simply by computing the fraction of listening events per artist for each user)
-    no_users = UAM.shape[0]
-    no_artists = UAM.shape[1]
-    # np.tile: take sum_pc_user no_artists times (results in an array of length no_artists*no_users)
-    # np.reshape: reshape the array to a matrix
-    # np.transpose: transpose the reshaped matrix
-    artist_sum_copy = np.tile(sum_pc_user, no_artists).reshape(no_artists, no_users).transpose()
+    # no_users = UAM.shape[0]
+    # no_artists = UAM.shape[1]
+    # # np.tile: take sum_pc_user no_artists times (results in an array of length no_artists*no_users)
+    # # np.reshape: reshape the array to a matrix
+    # # np.transpose: transpose the reshaped matrix
+    # artist_sum_copy = np.tile(sum_pc_user, no_artists).reshape(no_artists, no_users).transpose()
     # Perform sum-to-1 normalization
 
-    print artist_sum_copy
-    print "\n\n\n"
-
-    UAM = UAM / artist_sum_copy
-    print UAM
-
-    # Inform user
-    print "UAM created. Users: " + str(UAM.shape[0]) + ", Artists: " + str(UAM.shape[1])
+    for u in range (0, UAM.shape[0]):
+        lineVec = UAM[u,:]
+        lineVecNorm = 0
+        for v in lineVec:
+            lineVecNorm += v*v
+        lineVecNorm = np.sqrt(lineVecNorm)
+        UAM[u,:] = UAM[u,:] / lineVecNorm
 
     # Write everything to text file (artist names, user names, UAM)
     # Write artists to text file
