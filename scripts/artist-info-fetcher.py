@@ -18,8 +18,11 @@ fetcher = [WIKIPEDIA_URL_SS, THEAUDIODB_URL, DISCOGS_URL]
 
 def getUrl(q, url):
     print url
-    q.put(urllib2.urlopen(url).read())
-
+    try:
+        q.put(urllib2.urlopen(url).read())
+    except:
+        print "error"
+        pass
 
 def getArtistInfo(artist):
     contentMerged = []

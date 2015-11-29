@@ -6,7 +6,6 @@ import helpers
 import json
 import sys
 
-uniqueArtists = []
 LEs = []
 
 def checkEventTree(eventTree):
@@ -64,8 +63,3 @@ if __name__ == "__main__":
         outfile.write("user\tartist\ttrack\ttime\n")
         for le in LEs:
             outfile.write(le[0] + "\t" + le[1] + "\t" + le[2] + "\t" + le[3] + "\n")
-
-    filename = "unique_artists_{0}.csv".format(len(uniqueArtists))
-    with open(pathToOverall + filename, "w") as outfile:
-        for uniqueArtist in uniqueArtists:
-            outfile.write(uniqueArtist + "\n")
