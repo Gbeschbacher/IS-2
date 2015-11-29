@@ -1,6 +1,7 @@
 # Post-process the crawled music context data, extract term weights, and compute cosine similarities.
 __author__ = "Eschbacher - Kratzer - Scharfetter"
 
+import os
 import numpy as np
 import scipy.spatial.distance as scidist      # import distance computation module from scipy package
 import urllib

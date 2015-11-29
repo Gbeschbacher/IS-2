@@ -10,10 +10,11 @@ LISTENING_EVENTS = "./scripts/listening-events.py"
 USER_FETCHER = "./scripts/user-fetcher.py"
 ARTIST_INFO_FETCHER = "./scripts/artist-info-fetcher.py"
 CONVERTER_UAM = "./scripts/converter-uam.py"
+WEB_SIMILARITY = "./scripts/web-similarity.py"
 MINIMUM_USERS = 10
 
 UNIQUE_USERS = "./data/overall/unique_users_2000.csv"
-LISTENING_EVENTS_F = "./data/overall/listening_events_34918.csv"
+LISTENING_EVENTS_F = "./data/overall/listening_events_901767.csv"
 UAM_ARTISTS = "./data/overall/UAM_artists.csv"
 
 plot:
@@ -33,7 +34,7 @@ uam:
 	python $(CONVERTER_UAM) $(LISTENING_EVENTS_F) $(OVERALL)
 
 artist-info:
-	python $(ARTIST_INFO_FETCHER) $(ARTISTS)	$(UAM_ARTISTS)
+	python $(ARTIST_INFO_FETCHER) $(ARTISTS) $(UAM_ARTISTS)
 
 web-similarity:
 	python $(WEB_SIMILARITY) $(ARTISTS) $(UAM_ARTISTS) $(OVERALL)
