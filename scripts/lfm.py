@@ -38,7 +38,6 @@ def call(method, **kwargs):
     return urllib.urlopen(url).read()
 
 def getLEs(user, maxPages, maxEventsPerPage):
-    contentMerged = []
 
     queryQuoted = urllib.quote(user)
     q = Queue.Queue()
@@ -47,7 +46,7 @@ def getLEs(user, maxPages, maxEventsPerPage):
         url = LFM_API_URL + "?method=user.getrecenttracks&user=" + queryQuoted + \
               "&format=json&api_key=" + LFM_API_KEY + \
               "&limit=" + str(maxEventsPerPage) + \
-              "&page=" + str(p)
+              "&page=" + str(p+1)
 
         print "Retrieving page #" + str(p)
 
