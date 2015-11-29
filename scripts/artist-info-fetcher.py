@@ -22,11 +22,12 @@ def getUrl(q, url):
         q.put(urllib2.urlopen(url).read())
     except:
         print "error"
-        pass
 
 def getArtistInfo(artist):
     contentMerged = []
     q = Queue.Queue()
+    
+    threads = []
 
     for j, baseUrl in enumerate(fetcher):
         url = baseUrl + urllib2.quote(artist)
@@ -34,9 +35,13 @@ def getArtistInfo(artist):
         t = threading.Thread(target=getUrl, args = (q,url))
         t.daemon = True
         t.start()
+        threads.append(t)
 
-    for k in range(0, len(fetcher)):
-        contentMerged.append(q.get())
+    for t in threads:
+        t.join()
+        
+    for k in range(0, q.qsize()):
+        contentMerged.append(q.get(False))
 
     return contentMerged
 
