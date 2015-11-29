@@ -2,18 +2,19 @@ CONFIG = config.p
 RESULT = results.png
 
 USERS = "./data/users/"
+ARTISTS = "./data/artists/"
 OVERALL = "./data/overall/"
 BASE_USERS = "./data/base.csv"
 
 LISTENING_EVENTS = "./scripts/listening-events.py"
 USER_FETCHER = "./scripts/user-fetcher.py"
+ARTIST_INFO_FETCHER = "./scripts/artist-info-fetcher.py"
 CONVERTER_UAM = "./scripts/converter-uam.py"
 MINIMUM_USERS = 10
 
-UNIQUE_USERS = ./data/overall/unique_users_2000.csv
-LISTENING_EVENTS_F = ./data/overall/listening_events_34918.csv
-
-all: paths users listening-events
+UNIQUE_USERS = "./data/overall/unique_users_2000.csv"
+LISTENING_EVENTS_F = "./data/overall/listening_events_34918.csv"
+UAM_ARTISTS = "./data/overall/UAM_artists.csv"
 
 plot:
 	gnuplot $(CONFIG) > $(RESULT)
@@ -31,6 +32,11 @@ listening-events:
 uam:
 	python $(CONVERTER_UAM) $(LISTENING_EVENTS_F) $(OVERALL)
 
+artist-info:
+	python $(ARTIST_INFO_FETCHER) $(ARTISTS)	$(UAM_ARTISTS)
+
+web-similarity:
+	python $(WEB_SIMILARITY) $(ARTISTS) $(UAM_ARTISTS) $(OVERALL)
 
 clean.users:
 	rm -rf ./$(USERS)
@@ -38,4 +44,4 @@ clean.users:
 clean.overall:
 	rm -rf ./$(OVERALL)
 
-clean: clean.users clean.overall
+clean: clean.users
