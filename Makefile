@@ -11,11 +11,20 @@ USER_FETCHER = "./scripts/user-fetcher.py"
 ARTIST_INFO_FETCHER = "./scripts/artist-info-fetcher.py"
 CONVERTER_UAM = "./scripts/converter-uam.py"
 WEB_SIMILARITY = "./scripts/web-similarity.py"
+EVAL_RECOMMENDER = "./scripts/evaluate-recommender.py"
 MINIMUM_USERS = 10
 
 UNIQUE_USERS = "./data/overall/unique_users_2000.csv"
-LISTENING_EVENTS_F = "./data/overall/listening_events_901767.csv"
+LISTENING_EVENTS_F = "./data/overall/listening_events_898767.csv"
 UAM_ARTISTS = "./data/overall/UAM_artists.csv"
+UAM_USERS = "./data/overall/UAM_users.csv"
+UAM = "./data/overall/UAM.csv"
+AAM = "./data/overall/AAM.csv"
+
+CB = "CB"
+RB = "RB"
+CF = "CF"
+HYBRID = "HR_SCB"
 
 plot:
 	gnuplot $(CONFIG) > $(RESULT)
@@ -38,7 +47,19 @@ artist-info:
 
 web-similarity:
 	python $(WEB_SIMILARITY) $(ARTISTS) $(UAM_ARTISTS) $(OVERALL)
+    
+recommender-hybrid:
+	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(HYBRID)
 
+recommender-CF:
+	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(CF)
+    
+recommender-CB:
+	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(CB)
+    
+recommender-RB:
+	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(RB)
+    
 clean.users:
 	rm -rf ./$(USERS)
 

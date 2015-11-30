@@ -12,19 +12,19 @@ import random
 import scipy.spatial.distance as scidist        # import distance computation module from scipy package
 import operator
 from operator import itemgetter                 # for sorting dictionaries w.r.t. values
-
+import sys
 
 # Parameters
-UAM_FILE = "UAM.csv"                # user-artist-matrix (UAM)
-ARTISTS_FILE = "UAM_artists.csv"    # artist names for UAM
-USERS_FILE = "UAM_users.csv"        # user names for UAM
-AAM_FILE = "AAM.txt"                # artist-artist similarity matrix (AAM)
+UAM_FILE = "../data/overall/UAM.csv"                # user-artist-matrix (UAM)
+ARTISTS_FILE = "./data/overall/UAM_artists.csv"    # artist names for UAM
+USERS_FILE = "../data/overall/UAM_users.csv"        # user names for UAM
+AAM_FILE = "../data/overall/aam.csv"                # artist-artist similarity matrix (AAM)
 METHOD = "HR_SCB"                       # recommendation method
                                     # ["RB", "CF", "CB", "HR_SEB", "HR_SCB"]
 K = 3           # for CB: number of nearest neighbors to consider for each artist in seed user's training set
 MAX_ARTISTS = 30          # for hybrid: number of artists to recommend at most
 
-NF = 5              # number of folds to perform in cross-validation
+NF = 10              # number of folds to perform in cross-validation
 
 
 # Function to read metadata (users or artists)
@@ -194,26 +194,18 @@ def recommend_RB(artists_idx, no_items):
     # Return dict of recommended artist indices as keys (and scores as values)
     return dict_random_aidx
 
+def run(artists, users, UAM, AAM) :
 
-# Main program
-if __name__ == '__main__':
-
-    # Initialize variables to hold performance measures
+   # Initialize variables to hold performance measures
     avg_prec = 0;       # mean precision
     avg_rec = 0;        # mean recall
-
-    # Load metadata from provided files into lists
-    artists = read_from_file(ARTISTS_FILE)
-    users = read_from_file(USERS_FILE)
-    # Load UAM
-    UAM = np.loadtxt(UAM_FILE, delimiter='\t', dtype=np.float32)
-    # Load AAM
-    AAM = np.loadtxt(AAM_FILE, delimiter='\t', dtype=np.float32)
-
+    
     # For all users in our data (UAM)
     no_users = UAM.shape[0]
     no_artists = UAM.shape[1]
     for u in range(0, no_users):
+    
+        #print ("User: %f0" % (u))
 
         # Get seed user's artists listened to
         u_aidx = np.nonzero(UAM[u, :])[0]
@@ -227,8 +219,8 @@ if __name__ == '__main__':
             train_aidx = u_aidx[train]
 
             # Show progress
-            print "User: " + str(u) + ", Fold: " + str(fold) + ", Training items: " + str(
-                len(train_aidx)) + ", Test items: " + str(len(test_aidx)),      # the comma at the end avoids line break
+            #print "User: " + str(u) + ", Fold: " + str(fold) + ", Training items: " + str(
+            #    len(train_aidx)) + ", Test items: " + str(len(test_aidx)),      # the comma at the end avoids line break
             # Call recommend function
             copy_UAM = UAM.copy()       # we need to create a copy of the UAM, otherwise modifications within recommend function will effect the variable
 
@@ -283,7 +275,8 @@ if __name__ == '__main__':
             # Distill recommended artist indices from dictionary returned by the recommendation functions
             rec_aidx = dict_rec_aidx.keys()
 
-            print "Recommended items: ", len(rec_aidx)
+            #print "Recommended items: ", len(rec_aidx)
+            #print "Recommended items: ", len(rec_aidx)
 
             # Compute performance measures
             correct_aidx = np.intersect1d(test_aidx, rec_aidx)          # correctly predicted artists
@@ -305,10 +298,39 @@ if __name__ == '__main__':
             avg_rec += rec / (NF * no_users)
 
             # Output precision and recall of current fold
-            print ("\tPrecision: %.2f, Recall:  %.2f" % (prec, rec))
+            #print ("\tPrecision: %.2f, Recall:  %.2f" % (prec, rec))
 
             # Increase fold counter
             fold += 1
 
     # Output mean average precision and recall
-    print ("\nMAP: %.2f, MAR  %.2f" % (avg_prec, avg_rec))
+    fScore = 2 * (avg_prec * avg_rec)/(avg_prec + avg_rec)
+    print ("\n%.0f, %.0f %.2f, %.2f, %.2f" % (K, MAX_ARTISTS, avg_prec, avg_rec, fScore))
+
+
+
+# Main program
+if __name__ == '__main__':
+
+    ARTISTS_FILE = str(sys.argv[3])
+    USERS_FILE = str(sys.argv[4])
+    UAM_FILE = str(sys.argv[1])
+    AAM_FILE = str(sys.argv[2])
+    METHOD = str(sys.argv[5])
+    # Load metadata from provided files into lists
+    artists = read_from_file(ARTISTS_FILE)
+    users = read_from_file(USERS_FILE)
+    # Load UAM
+    UAM = np.loadtxt(UAM_FILE, delimiter='\t', dtype=np.float32)
+    # Load AAM
+    AAM = np.loadtxt(AAM_FILE, delimiter='\t', dtype=np.float32)
+
+    artistSteps = [10,20,30]
+    neighbourSteps = [3,5,10]
+    print "Neighbours, Recommended Artists, MAP, MAR, FSCORE"
+    for k in neighbourSteps :
+        K = k
+        for a in artistSteps :
+            MAX_ARTISTS = a
+            run(artists, users, UAM, AAM)
+    
