@@ -142,20 +142,20 @@ if __name__ == "__main__":
     yAxes = [dataHybrid[:3,2], dataCF[:3,2], dataCB[:3,2], data[:3,2]]
     yAxes = np.array(yAxes)
     
-    makePlot(xAxes, yAxes, lineLabels, "MAR", "MAP", "Relation between MAP and MAR for different recommenders with 3 neighbours")
+    makePlot(xAxes, yAxes, lineLabels, "MAR", "MAP", "Relation between MAP and MAR for different recommenders with 3 neighbours (10-30 recommended Artists)")
     
     xAxes = [dataHybrid[3:6,3], dataCF[3:6,3], dataCB[3:6,3], data[3:6,3]]
     xAxes = np.array(xAxes)
     yAxes = [dataHybrid[3:6,2], dataCF[3:6,2], dataCB[3:6,2], data[3:6,2]]
     yAxes = np.array(yAxes)
     
-    makePlot(xAxes, yAxes, lineLabels, "MAR", "MAP", "Relation between MAP and MAR for different recommenders with 5 neighbours")
+    makePlot(xAxes, yAxes, lineLabels, "MAR", "MAP", "Relation between MAP and MAR for different recommenders with 5 neighbours (10-30 recommended Artists)")
     
     xAxes = [dataHybrid[6:9,3], dataCF[6:9,3], dataCB[6:9,3], data[6:9,3]]
     xAxes = np.array(xAxes)
     yAxes = [dataHybrid[6:9,2], dataCF[6:9,2], dataCB[6:9,2], data[6:9,2]]
     yAxes = np.array(yAxes)
     
-    makePlot(xAxes, yAxes, lineLabels, "MAR", "MAP", "Relation between MAP and MAR for different recommenders with 10 neighbours")
+    makePlot(xAxes, yAxes, lineLabels, "MAR", "MAP", "Relation between MAP and MAR for different recommenders with 10 neighbours (10-30 recommended Artists)")
 
     
