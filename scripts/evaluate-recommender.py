@@ -305,7 +305,7 @@ def run(artists, users, UAM, AAM) :
 
     # Output mean average precision and recall
     fScore = 2 * (avg_prec * avg_rec)/(avg_prec + avg_rec)
-    print ("\n%.0f, %.0f %.2f, %.2f, %.2f" % (K, MAX_ARTISTS, avg_prec, avg_rec, fScore))
+    print ("%.0f, %.0f %.2f, %.2f, %.2f" % (K, MAX_ARTISTS, avg_prec, avg_rec, fScore))
 
 
 
