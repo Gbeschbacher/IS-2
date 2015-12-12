@@ -81,3 +81,45 @@
 
 - Probleme:
     Google crawlen über python ist nicht so einfach, da keine suchergebnisse angefordert werden können
+
+
+
+### PART 3:
+
+1. User-based Similarity Measure
+
+Ausgangsbasis: C1ku_users_extended.csv
+zur similarity berechnung haben wir folgende maße verwendet:
+- geodäsische längendistanz: user im selben land oder in einem nahen land sind sich ähnlicher; (wurde mit geopy und den gegebenen koordinaten des herkunftslandes berechnet)
+- age: user mit geringem altersunterschied sind sich ähnlicher
+- gender: user mit gleichem geschlecht sind sich ähnlicher
+keine daten: user, die keine bestimmten daten angegeben haben sind sich ähnlicher
+
+alle werte wurden normalisiert und mit einer gleichverteilten gewichtung von 0.33 aufsummiert, um den sim.-wert zwischen zwei usern zu ermitteln
+
+2. user based recommender
+selbstständiger user-based recommender wurde ähnlich zum bereits vorhandenen cb-recommender implementiert (einzige unterschied ist UUM statt AAM)
+
+3. extended col. filtering
+CF approach wurde mit UUM erweitert;
+
+3.1 user similarity aus der UAM ausmultipliziert mit user similarity aus UUM (Usersimilarity UAM * UUM: sim_users[u] = sim * UUM[seed_uidx, u]), wobei sim der ausgerechneten similarity (aus der UAM) entspricht.
+User similarity UUM-Threshhold
+
+3.2 ein user similarity cutoff mittels threshhold
+    if UUM[seed_uidx, u] < 0.7:
+        sim_users[u] = 0
+
+Für alle user, die in der UUM einen niedrigeren sim.-wert haben, wird die gesamt similarity auf 0 gesetzt, um nicht mehr als empfehlungsvorschlag in frage zu kommen
+
+conclusio von 3.1 und 3.2 vom testen her funktioniert keiner der beiden besser und keiner der ansätze kann weder als verbesserung, noch als verschlechterung aufkommen
+
+4, hybrid user-based und cf
+
+wie vorher (scoring based ranking), wo CF mit 100% gewichtet wurde und UB mit 20%;
+
+normalisierung dre werte wie vorheris nicht notwendig, da dies beim sortieren bedeutungslos ist
+
+5. UB recommender, extended CF, HR_UBCF_SB
+
+knn mindestens 20, aber k kann dynamisch wachsen, falls die geforderte anzahl an zu recommendeten artists nicht erreicht wird
