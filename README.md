@@ -116,7 +116,7 @@ conclusio von 3.1 und 3.2 vom testen her funktioniert keiner der beiden besser u
 
 4, hybrid user-based und cf
 
-wie vorher (scoring based ranking), wo CF mit 100% gewichtet wurde und UB mit 20%;
+wie vorher (scoring based ranking), wo CF mit 80% gewichtet wurde und UB mit 20%;
 
 normalisierung dre werte wie vorheris nicht notwendig, da dies beim sortieren bedeutungslos ist
 
