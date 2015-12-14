@@ -107,7 +107,7 @@ if __name__ == "__main__":
         for t in terms:
             if (termLookup.has_key(t)):
                 tIdx = termLookup[t]
-                tfidf[aIdx, tIdx] += 1
+                tfidf[aIdx-1, tIdx] += 1
 
     # Replace TF values in tfidf by TF-IDF values:
     # copy and reshape IDF vector and point-wise multiply it with the TF values

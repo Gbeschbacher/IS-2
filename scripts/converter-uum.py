@@ -6,7 +6,7 @@ import numpy as np
 from geopy.distance import great_circle
 
 # name, age, country, long, lat, gender, usertype
-C1KU_users = "../data/final/C1ku_users_extended.csv"
+C1KU_users = "../data/overall/C1ku_users_extended.csv"
 
 # output
 UUM_FILE = "UUM.csv"

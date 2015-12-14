@@ -5,7 +5,7 @@ import os
 import urllib
 
 #Reading a file and returning its content
-def readFile(filename, header = False):
+def readFile(filename, header = False, rowIndex = 0):
     content = []
     with open(filename, 'r') as f:
         reader = csv.reader(f, delimiter='\t')
@@ -13,7 +13,7 @@ def readFile(filename, header = False):
             headers = reader.next()
 
         for row in reader:
-            content.append(row[0])
+            content.append(row[rowIndex])
 
     return content
 

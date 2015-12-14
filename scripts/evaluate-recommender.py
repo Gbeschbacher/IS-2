@@ -15,11 +15,13 @@ from operator import itemgetter                 # for sorting dictionaries w.r.t
 import sys
 from time import time
 
+import os
+
 # Parameters
-UAM_FILE = "../data/overall/UAM.csv"                # user-artist-matrix (UAM)
+UAM_FILE = "../data/overall/C1ku_UAM.csv"                # user-artist-matrix (UAM)
 UUM_FILE = "../data/overall/UUM.csv"                # user-artist-matrix (UAM)
-ARTISTS_FILE = "./data/overall/UAM_artists.csv"    # artist names for UAM
-USERS_FILE = "../data/overall/UAM_users.csv"        # user names for UAM
+ARTISTS_FILE = "../data/overall/C1ku_artists_extended.csv"    # artist names for UAM
+USERS_FILE = "../data/overall/C1ku_users_extended.csv"        # user names for UAM
 AAM_FILE = "../data/overall/aam.csv"                # artist-artist similarity matrix (AAM)
 
 
@@ -368,6 +370,32 @@ def recommend_RB(artists_idx, no_items):
 
     # Return dict of recommended artist indices as keys (and scores as values)
     return dict_random_aidx
+	
+	# Function that implements a dumb random recommender. It predicts a number of randomly chosen items.
+# It returns a dictionary of recommended artist indices (and corresponding scores).
+def recommend_RBU(artists_idx, no_items, UAM):
+    # artists_idx           list of artist indices in the training set
+    # no_items              no of items to predict
+	
+    random_user = random.randint(0,UAM.shape[0]-1)
+    
+    u_aidx = np.nonzero(UAM[random_user, :])[0]
+    
+    if(len(u_aidx) < no_items) :
+        no_items = len(u_aidx)
+    
+    # Let's predict a number of random items from the randomly selected users playlist
+    random_aidx = random.sample(u_aidx, no_items)
+
+    #select only those indices that are not in the users training set
+    random_aidx = set(random_aidx) - set(artists_idx)
+    # Insert scores into dictionary
+    dict_random_aidx = {}
+    for aidx in random_aidx:
+        dict_random_aidx[aidx] = 1.0            # for random recommendations, all scores are equal
+
+    # Return dict of recommended artist indices as keys (and scores as values)
+    return dict_random_aidx
 
 
 # Main program
@@ -387,7 +415,7 @@ if __name__ == '__main__':
     no_users = UAM.shape[0]
     no_artists = UAM.shape[1]
 
-    METHOD = "HR_CBCFPB_RB"                       # recommendation method
+    METHOD = "HR_UBCF_SB"                       # recommendation method
     # RB
     # CF _k, _artists, _artists_k
     # CB _k, _artists, _artists_k
@@ -405,8 +433,8 @@ if __name__ == '__main__':
     # HR_CBCF_RB _k, _artists, _artists_k
     # HR_CBPB_RB _k, _artists, _artists_k
 
-    K = 2           # for CB: number of nearest neighbors to consider for each artist in seed user's training set
-    MAX_ARTISTS = 20          # for hybrid: number of artists to recommend at most
+    K = 10           # for CB: number of nearest neighbors to consider for each artist in seed user's training set
+    MAX_ARTISTS = 10          # for hybrid: number of artists to recommend at most
 
     foldername = "./results/"
     if not os.path.exists(foldername):
@@ -416,7 +444,7 @@ if __name__ == '__main__':
     with open(filename, "w") as myfile:
             myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
 
-    while(K <= 40):
+    while(MAX_ARTISTS <= 40):
         # Initialize variables to hold performance measures
         avg_prec = 0;       # mean precision
         avg_rec = 0;        # mean recall
@@ -424,9 +452,11 @@ if __name__ == '__main__':
         t0 = time()
 
         for u in range(0, no_users):
-
+            
             # Get seed user's artists listened to
             u_aidx = np.nonzero(UAM[u, :])[0]
+            if(len(u_aidx) < NF) :
+                continue
 
             # Split user's artists into train and test set for cross-fold (CV) validation
             fold = 0
@@ -450,6 +480,8 @@ if __name__ == '__main__':
 
                 if METHOD == "RB":          # random baseline
                     dict_rec_aidx = recommend_RB(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS) # len(test_aidx))
+                if METHOD == "RBU":          # random baseline
+                    dict_rec_aidx = recommend_RBU(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS, UAM) # len(test_aidx))
                 elif METHOD == "CF":        # collaborative filtering
                     dict_rec_aidx = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
                 elif METHOD == "UB":
@@ -757,8 +789,7 @@ if __name__ == '__main__':
         with open(filename, "a") as myfile:
             myfile.write(str(K) + "\t" + str(MAX_ARTISTS) + "\t" + "%.2f" % avg_prec + "\t" + "%.2f" % avg_rec + "\t" + "%.2f" % pastedTime + "\n")
 
-        #MAX_ARTISTS += 10
-        K += 2
+        MAX_ARTISTS += 5
 
     print "FINISHED"
 
