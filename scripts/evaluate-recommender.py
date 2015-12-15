@@ -14,6 +14,7 @@ import operator
 from operator import itemgetter                 # for sorting dictionaries w.r.t. values
 import sys
 from time import time
+from multiprocessing import Process
 
 import os
 
@@ -370,20 +371,20 @@ def recommend_RB(artists_idx, no_items):
 
     # Return dict of recommended artist indices as keys (and scores as values)
     return dict_random_aidx
-	
+
 	# Function that implements a dumb random recommender. It predicts a number of randomly chosen items.
 # It returns a dictionary of recommended artist indices (and corresponding scores).
 def recommend_RBU(artists_idx, no_items, UAM):
     # artists_idx           list of artist indices in the training set
     # no_items              no of items to predict
-	
+
     random_user = random.randint(0,UAM.shape[0]-1)
-    
+
     u_aidx = np.nonzero(UAM[random_user, :])[0]
-    
+
     if(len(u_aidx) < no_items) :
         no_items = len(u_aidx)
-    
+
     # Let's predict a number of random items from the randomly selected users playlist
     random_aidx = random.sample(u_aidx, no_items)
 
@@ -398,8 +399,370 @@ def recommend_RBU(artists_idx, no_items, UAM):
     return dict_random_aidx
 
 
+
+def run(artists, users, UAM, UUM, METHOD, K, MAX_ARTISTS):
+    foldername = "./results/"
+    if not os.path.exists(foldername):
+        os.makedirs(foldername)
+
+    filename = foldername + str(METHOD) + "_k.txt"
+    with open(filename, "w") as myfile:
+            myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
+
+    # Initialize variables to hold performance measures
+    avg_prec = 0;       # mean precision
+    avg_rec = 0;        # mean recall
+
+    t0 = time()
+
+    for u in range(0, no_users):
+
+        # Get seed user's artists listened to
+        u_aidx = np.nonzero(UAM[u, :])[0]
+        if(len(u_aidx) < NF) :
+            continue
+
+        # Split user's artists into train and test set for cross-fold (CV) validation
+        fold = 0
+        kf = cross_validation.KFold(len(u_aidx), n_folds=NF)  # create folds (splits) for 5-fold CV
+        for train, test in kf:  # for all folds
+
+            test_aidx = u_aidx[test]
+            train_aidx = u_aidx[train]
+
+            # Show progress
+            # print "User: " + str(u) + ", Fold: " + str(fold) + ", Training items: " + str(
+            #     len(train_aidx)) + ", Test items: " + str(len(test_aidx)),      # the comma at the end avoids line break
+            # Call recommend function
+            copy_UAM = UAM.copy()       # we need to create a copy of the UAM, otherwise modifications within recommend function will effect the variable
+
+
+            # Run recommendation method specified in METHOD
+            # NB: u_aidx[train_aidx] gives the indices of training artists
+            rec_aidx = {}   # use a dictionary to store (similarity) scores along recommended artist indices (in contrast to Evaluate_Recommender.py)
+
+            print "Searching " + METHOD
+            if METHOD == "RB":          # random baseline
+                dict_rec_aidx = recommend_RB(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS) # len(test_aidx))
+            if METHOD == "RBU":          # random baseline
+                dict_rec_aidx = recommend_RBU(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS, UAM) # len(test_aidx))
+            elif METHOD == "CF":        # collaborative filtering
+                dict_rec_aidx = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+            elif METHOD == "UB":
+                dict_rec_aidx = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
+            elif METHOD == "UBCF":        # collaborative filtering
+                dict_rec_aidx = recommend_UBCF(copy_UAM, UUM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+            elif METHOD == "CB":        # content-based recommender
+                dict_rec_aidx = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+            elif METHOD == "PB":
+                dict_rec_aidx = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
+            elif METHOD == "HR_CBCF_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
+                dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+                # Fuse scores given by CF and by CB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CB.keys():
+                    scores[0, aidx] = dict_rec_aidx_CB[aidx]
+                for aidx in dict_rec_aidx_CF.keys():
+                    # scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.75 # 3.45 / 11.30
+                    scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.5 # 3.72 / 12.14
+                    # scores[1, aidx] = dict_rec_aidx_CF[aidx] * dict_rec_aidx_CF[aidx] # 3.48 / 11.41
+                # Apply aggregation function
+                scores_fused = np.max(scores, axis=0)
+                # Sort and select top artists to recommend
+                sorted_idx = np.argsort(scores_fused)
+                # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
+                artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_CF.items()))
+                sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
+
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
+            elif METHOD == "HR_UBCF_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
+                dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+                # Fuse scores given by CF and by CB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_UB.keys():
+                    scores[0, aidx] = dict_rec_aidx_UB[aidx] * 0.2
+                for aidx in dict_rec_aidx_CF.keys():
+                    # scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.75 # 3.45 / 11.30
+                    scores[1, aidx] = dict_rec_aidx_CF[aidx] # * 0.5 # 3.72 / 12.14
+                    # scores[1, aidx] = dict_rec_aidx_CF[aidx] * dict_rec_aidx_CF[aidx] # 3.48 / 11.41
+                # Apply aggregation function
+                scores_fused = np.max(scores, axis=0)
+                # Sort and select top artists to recommend
+                sorted_idx = np.argsort(scores_fused)
+                # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
+                artists_length = min(len(dict_rec_aidx_UB.items()), len(dict_rec_aidx_CF.items()))
+                sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
+
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
+
+                # Alternative code to select top K_HR artists
+                # # To this end, sort recommended artists in descending order and return top N
+                # dict_rec_aidx_tmp = {}
+                # vs = sorted(dict_rec_aidx.items(), key=itemgetter(1), reverse=True)
+                # vs = vs[:K_HR]
+                # for i in range(0, len(vs)):
+                #     dict_rec_aidx_tmp[vs[i][0]] = vs[i][1]
+                # dict_rec_aidx = dict_rec_aidx_tmp
+            elif METHOD == "HR_CBPB_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
+                dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
+                # Fuse scores given by CF and by CB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CB.keys():
+                    scores[0, aidx] = dict_rec_aidx_CB[aidx]
+                for aidx in dict_rec_aidx_PB.keys():
+                    # scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.75 # 3.45 / 11.30
+                    scores[1, aidx] = dict_rec_aidx_PB[aidx] * 0.4  # 3.72 / 12.14
+                    # scores[1, aidx] = dict_rec_aidx_CF[aidx] * dict_rec_aidx_CF[aidx] # 3.48 / 11.41
+                # Apply aggregation function
+                scores_fused = np.max(scores, axis=0)
+                # Sort and select top artists to recommend
+                sorted_idx = np.argsort(scores_fused)
+                # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
+                artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_PB.items()))
+                sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
+
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
+
+            elif METHOD == "HR_CBUBCF_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
+                dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+                # Fuse scores given by CF and by CB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(3, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CB.keys():
+                    scores[0, aidx] = dict_rec_aidx_CB[aidx]
+                for aidx in dict_rec_aidx_CF.keys():
+                    scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.5  # 3.72 / 12.14
+                for aidx in dict_rec_aidx_UB.keys():
+                    scores[2, aidx] = dict_rec_aidx_UB[aidx] * 0.2  # 3.72 / 12.14
+                # Apply aggregation function
+                scores_fused = np.max(scores, axis=0)
+                # Sort and select top artists to recommend
+                sorted_idx = np.argsort(scores_fused)
+                # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
+                artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_CF.items()), len(dict_rec_aidx_UB.items()))
+                sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
+
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
+            elif METHOD == "HR_CBUBCFPB_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
+                dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
+                # Fuse scores given by CF and by CB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(4, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CB.keys():
+                    scores[0, aidx] = dict_rec_aidx_CB[aidx]
+                for aidx in dict_rec_aidx_CF.keys():
+                    scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.5  # 3.72 / 12.14
+                for aidx in dict_rec_aidx_UB.keys():
+                    scores[2, aidx] = dict_rec_aidx_UB[aidx] * 0.2  # 3.72 / 12.14
+                for aidx in dict_rec_aidx_PB.keys():
+                    scores[3, aidx] = dict_rec_aidx_PB[aidx] * 0.3  # 3.72 / 12.14
+                # Apply aggregation function
+                scores_fused = np.max(scores, axis=0)
+                # Sort and select top artists to recommend
+                sorted_idx = np.argsort(scores_fused)
+                # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
+                artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_CF.items()), len(dict_rec_aidx_UB.items()), len(dict_rec_aidx_PB.items()))
+                sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
+
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
+
+            elif METHOD == "HR_CBPB_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
+                dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
+                # Fuse scores given by CB and by PB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CB.keys():
+                    scores[0, aidx] = dict_rec_aidx_CB[aidx]
+                for aidx in dict_rec_aidx_PB.keys():
+                    scores[1, aidx] = dict_rec_aidx_PB[aidx]
+                # Convert scores to ranks
+                ranks = np.zeros(shape=(2, no_artists), dtype=np.int32)         # init rank matrix
+                for m in range(0, scores.shape[0]):                             # for all methods to fuse
+                    aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
+                    scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
+                    # Insert votes (i.e., inverse ranks) for each artist and current method
+                    for a in range(0, len(scores_sorted_idx)):
+                        ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
+                # Sum ranks over different approaches
+                ranks_fused = np.sum(ranks, axis=0)
+                # Sort and select top K_HR artists to recommend
+                sorted_idx = np.argsort(ranks_fused)
+                sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
+            elif METHOD == "HR_UBCF_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
+                dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
+                # Fuse scores given by CB and by PB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CF.keys():
+                    scores[0, aidx] = dict_rec_aidx_CF[aidx]
+                for aidx in dict_rec_aidx_UB.keys():
+                    scores[1, aidx] = dict_rec_aidx_UB[aidx]
+                # Convert scores to ranks
+                ranks = np.zeros(shape=(2, no_artists), dtype=np.int32)         # init rank matrix
+                for m in range(0, scores.shape[0]):                             # for all methods to fuse
+                    aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
+                    scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
+                    # Insert votes (i.e., inverse ranks) for each artist and current method
+                    for a in range(0, len(scores_sorted_idx)):
+                        ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
+                # Sum ranks over different approaches
+                ranks_fused = np.sum(ranks, axis=0)
+                # Sort and select top K_HR artists to recommend
+                sorted_idx = np.argsort(ranks_fused)
+                sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
+            elif METHOD == "HR_CBCF_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
+                dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+                # Fuse scores given by CB and by PB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CF.keys():
+                    scores[0, aidx] = dict_rec_aidx_CF[aidx]
+                for aidx in dict_rec_aidx_CB.keys():
+                    scores[1, aidx] = dict_rec_aidx_CB[aidx]
+                # Convert scores to ranks
+                ranks = np.zeros(shape=(2, no_artists), dtype=np.int32)         # init rank matrix
+                for m in range(0, scores.shape[0]):                             # for all methods to fuse
+                    aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
+                    scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
+                    # Insert votes (i.e., inverse ranks) for each artist and current method
+                    for a in range(0, len(scores_sorted_idx)):
+                        ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
+                # Sum ranks over different approaches
+                ranks_fused = np.sum(ranks, axis=0)
+                # Sort and select top K_HR artists to recommend
+                sorted_idx = np.argsort(ranks_fused)
+                sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
+
+            elif METHOD == "HR_CBCFPB_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
+                dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
+                dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
+                # Fuse scores given by CB and by PB recommenders
+                # First, create matrix to hold scores per recommendation method per artist
+                scores = np.zeros(shape=(3, no_artists), dtype=np.float32)
+                # Add scores from CB and CF recommenders to this matrix
+                for aidx in dict_rec_aidx_CF.keys():
+                    scores[0, aidx] = dict_rec_aidx_CF[aidx]
+                for aidx in dict_rec_aidx_CB.keys():
+                    scores[1, aidx] = dict_rec_aidx_CB[aidx]
+                for aidx in dict_rec_aidx_PB.keys():
+                    scores[2, aidx] = dict_rec_aidx_PB[aidx]
+                # Convert scores to ranks
+                ranks = np.zeros(shape=(3, no_artists), dtype=np.int32)         # init rank matrix
+                for m in range(0, scores.shape[0]):                             # for all methods to fuse
+                    aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
+                    scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
+                    # Insert votes (i.e., inverse ranks) for each artist and current method
+                    for a in range(0, len(scores_sorted_idx)):
+                        ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
+                # Sum ranks over different approaches
+                ranks_fused = np.sum(ranks, axis=0)
+                # Sort and select top K_HR artists to recommend
+                sorted_idx = np.argsort(ranks_fused)
+                sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
+                # Put (artist index, score) pairs of highest scoring artists in a dictionary
+                dict_rec_aidx = {}
+                for i in range(0, len(sorted_idx_top)):
+                    dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
+
+            print METHOD + " finished; calculating stats"
+
+            # Distill recommended artist indices from dictionary returned by the recommendation functions
+            rec_aidx = dict_rec_aidx.keys()
+
+            # print "Recommended items: ", len(rec_aidx)
+
+            # Compute performance measures
+            correct_aidx = np.intersect1d(test_aidx, rec_aidx)          # correctly predicted artists
+            # True Positives is amount of overlap in recommended artists and test artists
+            TP = len(correct_aidx)
+            # False Positives is recommended artists minus correctly predicted ones
+            FP = len(np.setdiff1d(rec_aidx, correct_aidx))
+            # Precision is percentage of correctly predicted among predicted
+            if len(rec_aidx) == 0:      # if we cannot predict a single artist -> precision is defined as 1 (we don't make wrong predictions)
+                prec = 100.0
+            else:               # compute precision
+                prec = 100.0 * TP / len(rec_aidx)
+            # Recall is percentage of correctly predicted among all listened to
+            rec = 100.0 * TP / len(test_aidx)
+
+
+            # add precision and recall for current user and fold to aggregate variables
+            avg_prec += prec / (NF * no_users)
+            avg_rec += rec / (NF * no_users)
+
+            # Output precision and recall of current fold
+            # print ("\tPrecision: %.2f, Recall:  %.2f" % (prec, rec))
+
+            # Increase fold counter
+            fold += 1
+
+    t1 = time()
+    pastedTime = t1 - t0
+
+    # Output mean average precision and recall
+    print str(MAX_ARTISTS) + "/" + str(K) + ": MAP %.2f" % avg_prec + " MAR %.2f" % avg_rec + " Time %.2f" % pastedTime
+
+    with open(filename, "a") as myfile:
+        myfile.write(str(K) + "\t" + str(MAX_ARTISTS) + "\t" + "%.2f" % avg_prec + "\t" + "%.2f" % avg_rec + "\t" + "%.2f" % pastedTime + "\n")
+
+
+    print "FINISHED"
+
+
 # Main program
 if __name__ == '__main__':
+
+    processes = []
 
     # Load metadata from provided files into lists
     artists = read_from_file(ARTISTS_FILE)
@@ -415,7 +778,6 @@ if __name__ == '__main__':
     no_users = UAM.shape[0]
     no_artists = UAM.shape[1]
 
-    METHOD = "HR_UBCF_SB"                       # recommendation method
     # RB
     # CF _k, _artists, _artists_k
     # CB _k, _artists, _artists_k
@@ -436,361 +798,20 @@ if __name__ == '__main__':
     K = 10           # for CB: number of nearest neighbors to consider for each artist in seed user's training set
     MAX_ARTISTS = 10          # for hybrid: number of artists to recommend at most
 
-    foldername = "./results/"
-    if not os.path.exists(foldername):
-        os.makedirs(foldername)
+    try:
+        for METHOD in ["CB", "HR_CBCF_SB", "HR_CBPB_SB", "HR_CBUBCF_SB", "HR_CBUBCFPB_SB", "HR_CBPB_RB", "HR_CBCF_RB", "HR_CBCFPB_RB"]:
+            MAX_ARTISTS = 10
+            while(MAX_ARTISTS <= 40):
 
-    filename = foldername + str(METHOD) + "_k.txt"
-    with open(filename, "w") as myfile:
-            myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
+                print "Starting " + METHOD + " with " + str(MAX_ARTISTS) + " artists"
 
-    while(MAX_ARTISTS <= 40):
-        # Initialize variables to hold performance measures
-        avg_prec = 0;       # mean precision
-        avg_rec = 0;        # mean recall
-
-        t0 = time()
-
-        for u in range(0, no_users):
-            
-            # Get seed user's artists listened to
-            u_aidx = np.nonzero(UAM[u, :])[0]
-            if(len(u_aidx) < NF) :
-                continue
-
-            # Split user's artists into train and test set for cross-fold (CV) validation
-            fold = 0
-            kf = cross_validation.KFold(len(u_aidx), n_folds=NF)  # create folds (splits) for 5-fold CV
-            for train, test in kf:  # for all folds
-
-                test_aidx = u_aidx[test]
-                train_aidx = u_aidx[train]
-
-                # Show progress
-                # print "User: " + str(u) + ", Fold: " + str(fold) + ", Training items: " + str(
-                #     len(train_aidx)) + ", Test items: " + str(len(test_aidx)),      # the comma at the end avoids line break
-                # Call recommend function
-                copy_UAM = UAM.copy()       # we need to create a copy of the UAM, otherwise modifications within recommend function will effect the variable
-
-
-                # Run recommendation method specified in METHOD
-                # NB: u_aidx[train_aidx] gives the indices of training artists
-                rec_aidx = {}   # use a dictionary to store (similarity) scores along recommended artist indices (in contrast to Evaluate_Recommender.py)
-
-
-                if METHOD == "RB":          # random baseline
-                    dict_rec_aidx = recommend_RB(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS) # len(test_aidx))
-                if METHOD == "RBU":          # random baseline
-                    dict_rec_aidx = recommend_RBU(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS, UAM) # len(test_aidx))
-                elif METHOD == "CF":        # collaborative filtering
-                    dict_rec_aidx = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                elif METHOD == "UB":
-                    dict_rec_aidx = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
-                elif METHOD == "UBCF":        # collaborative filtering
-                    dict_rec_aidx = recommend_UBCF(copy_UAM, UUM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                elif METHOD == "CB":        # content-based recommender
-                    dict_rec_aidx = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                elif METHOD == "PB":
-                    dict_rec_aidx = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
-                elif METHOD == "HR_CBCF_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
-                    dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                    # Fuse scores given by CF and by CB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CB.keys():
-                        scores[0, aidx] = dict_rec_aidx_CB[aidx]
-                    for aidx in dict_rec_aidx_CF.keys():
-                        # scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.75 # 3.45 / 11.30
-                        scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.5 # 3.72 / 12.14
-                        # scores[1, aidx] = dict_rec_aidx_CF[aidx] * dict_rec_aidx_CF[aidx] # 3.48 / 11.41
-                    # Apply aggregation function
-                    scores_fused = np.max(scores, axis=0)
-                    # Sort and select top artists to recommend
-                    sorted_idx = np.argsort(scores_fused)
-                    # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
-                    artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_CF.items()))
-                    sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
-
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
-                elif METHOD == "HR_UBCF_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
-                    dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                    # Fuse scores given by CF and by CB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_UB.keys():
-                        scores[0, aidx] = dict_rec_aidx_UB[aidx] * 0.2
-                    for aidx in dict_rec_aidx_CF.keys():
-                        # scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.75 # 3.45 / 11.30
-                        scores[1, aidx] = dict_rec_aidx_CF[aidx] # * 0.5 # 3.72 / 12.14
-                        # scores[1, aidx] = dict_rec_aidx_CF[aidx] * dict_rec_aidx_CF[aidx] # 3.48 / 11.41
-                    # Apply aggregation function
-                    scores_fused = np.max(scores, axis=0)
-                    # Sort and select top artists to recommend
-                    sorted_idx = np.argsort(scores_fused)
-                    # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
-                    artists_length = min(len(dict_rec_aidx_UB.items()), len(dict_rec_aidx_CF.items()))
-                    sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
-
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
-
-                    # Alternative code to select top K_HR artists
-                    # # To this end, sort recommended artists in descending order and return top N
-                    # dict_rec_aidx_tmp = {}
-                    # vs = sorted(dict_rec_aidx.items(), key=itemgetter(1), reverse=True)
-                    # vs = vs[:K_HR]
-                    # for i in range(0, len(vs)):
-                    #     dict_rec_aidx_tmp[vs[i][0]] = vs[i][1]
-                    # dict_rec_aidx = dict_rec_aidx_tmp
-                elif METHOD == "HR_CBPB_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
-                    dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
-                    # Fuse scores given by CF and by CB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CB.keys():
-                        scores[0, aidx] = dict_rec_aidx_CB[aidx]
-                    for aidx in dict_rec_aidx_PB.keys():
-                        # scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.75 # 3.45 / 11.30
-                        scores[1, aidx] = dict_rec_aidx_PB[aidx] * 0.4  # 3.72 / 12.14
-                        # scores[1, aidx] = dict_rec_aidx_CF[aidx] * dict_rec_aidx_CF[aidx] # 3.48 / 11.41
-                    # Apply aggregation function
-                    scores_fused = np.max(scores, axis=0)
-                    # Sort and select top artists to recommend
-                    sorted_idx = np.argsort(scores_fused)
-                    # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
-                    artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_PB.items()))
-                    sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
-
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
-
-                elif METHOD == "HR_CBUBCF_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
-                    dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                    # Fuse scores given by CF and by CB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(3, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CB.keys():
-                        scores[0, aidx] = dict_rec_aidx_CB[aidx]
-                    for aidx in dict_rec_aidx_CF.keys():
-                        scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.5  # 3.72 / 12.14
-                    for aidx in dict_rec_aidx_UB.keys():
-                        scores[2, aidx] = dict_rec_aidx_UB[aidx] * 0.2  # 3.72 / 12.14
-                    # Apply aggregation function
-                    scores_fused = np.max(scores, axis=0)
-                    # Sort and select top artists to recommend
-                    sorted_idx = np.argsort(scores_fused)
-                    # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
-                    artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_CF.items()), len(dict_rec_aidx_UB.items()))
-                    sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
-
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
-                elif METHOD == "HR_CBUBCFPB_SB":     # hybrid of CF and CB, using score-based fusion (SCB)
-                    dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
-                    # Fuse scores given by CF and by CB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(4, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CB.keys():
-                        scores[0, aidx] = dict_rec_aidx_CB[aidx]
-                    for aidx in dict_rec_aidx_CF.keys():
-                        scores[1, aidx] = dict_rec_aidx_CF[aidx] * 0.5  # 3.72 / 12.14
-                    for aidx in dict_rec_aidx_UB.keys():
-                        scores[2, aidx] = dict_rec_aidx_UB[aidx] * 0.2  # 3.72 / 12.14
-                    for aidx in dict_rec_aidx_PB.keys():
-                        scores[3, aidx] = dict_rec_aidx_PB[aidx] * 0.3  # 3.72 / 12.14
-                    # Apply aggregation function
-                    scores_fused = np.max(scores, axis=0)
-                    # Sort and select top artists to recommend
-                    sorted_idx = np.argsort(scores_fused)
-                    # artists_length = min(len(dict_rec_aidx_CB.items()) + len(dict_rec_aidx_CF.items()), MAX_ARTISTS)
-                    artists_length = min(len(dict_rec_aidx_CB.items()), len(dict_rec_aidx_CF.items()), len(dict_rec_aidx_UB.items()), len(dict_rec_aidx_PB.items()))
-                    sorted_idx_top = sorted_idx[len(sorted_idx)-artists_length:len(sorted_idx)]
-
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = scores_fused[sorted_idx_top[i]]
-
-                elif METHOD == "HR_CBPB_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
-                    dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
-                    # Fuse scores given by CB and by PB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CB.keys():
-                        scores[0, aidx] = dict_rec_aidx_CB[aidx]
-                    for aidx in dict_rec_aidx_PB.keys():
-                        scores[1, aidx] = dict_rec_aidx_PB[aidx]
-                    # Convert scores to ranks
-                    ranks = np.zeros(shape=(2, no_artists), dtype=np.int32)         # init rank matrix
-                    for m in range(0, scores.shape[0]):                             # for all methods to fuse
-                        aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
-                        scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
-                        # Insert votes (i.e., inverse ranks) for each artist and current method
-                        for a in range(0, len(scores_sorted_idx)):
-                            ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
-                    # Sum ranks over different approaches
-                    ranks_fused = np.sum(ranks, axis=0)
-                    # Sort and select top K_HR artists to recommend
-                    sorted_idx = np.argsort(ranks_fused)
-                    sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
-                elif METHOD == "HR_UBCF_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
-                    dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_UB = recommend_UB(copy_UAM, UUM, u, train_aidx, K, MAX_ARTISTS)
-                    # Fuse scores given by CB and by PB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CF.keys():
-                        scores[0, aidx] = dict_rec_aidx_CF[aidx]
-                    for aidx in dict_rec_aidx_UB.keys():
-                        scores[1, aidx] = dict_rec_aidx_UB[aidx]
-                    # Convert scores to ranks
-                    ranks = np.zeros(shape=(2, no_artists), dtype=np.int32)         # init rank matrix
-                    for m in range(0, scores.shape[0]):                             # for all methods to fuse
-                        aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
-                        scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
-                        # Insert votes (i.e., inverse ranks) for each artist and current method
-                        for a in range(0, len(scores_sorted_idx)):
-                            ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
-                    # Sum ranks over different approaches
-                    ranks_fused = np.sum(ranks, axis=0)
-                    # Sort and select top K_HR artists to recommend
-                    sorted_idx = np.argsort(ranks_fused)
-                    sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
-                elif METHOD == "HR_CBCF_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
-                    dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                    # Fuse scores given by CB and by PB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(2, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CF.keys():
-                        scores[0, aidx] = dict_rec_aidx_CF[aidx]
-                    for aidx in dict_rec_aidx_CB.keys():
-                        scores[1, aidx] = dict_rec_aidx_CB[aidx]
-                    # Convert scores to ranks
-                    ranks = np.zeros(shape=(2, no_artists), dtype=np.int32)         # init rank matrix
-                    for m in range(0, scores.shape[0]):                             # for all methods to fuse
-                        aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
-                        scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
-                        # Insert votes (i.e., inverse ranks) for each artist and current method
-                        for a in range(0, len(scores_sorted_idx)):
-                            ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
-                    # Sum ranks over different approaches
-                    ranks_fused = np.sum(ranks, axis=0)
-                    # Sort and select top K_HR artists to recommend
-                    sorted_idx = np.argsort(ranks_fused)
-                    sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
-
-                elif METHOD == "HR_CBCFPB_RB":     # hybrid of CB and PB, using rank-based fusion (RB), Borda rank aggregation
-                    dict_rec_aidx_CB = recommend_CB(AAM, train_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_CF = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
-                    dict_rec_aidx_PB = recommend_PB(copy_UAM, train_aidx, MAX_ARTISTS)
-                    # Fuse scores given by CB and by PB recommenders
-                    # First, create matrix to hold scores per recommendation method per artist
-                    scores = np.zeros(shape=(3, no_artists), dtype=np.float32)
-                    # Add scores from CB and CF recommenders to this matrix
-                    for aidx in dict_rec_aidx_CF.keys():
-                        scores[0, aidx] = dict_rec_aidx_CF[aidx]
-                    for aidx in dict_rec_aidx_CB.keys():
-                        scores[1, aidx] = dict_rec_aidx_CB[aidx]
-                    for aidx in dict_rec_aidx_PB.keys():
-                        scores[2, aidx] = dict_rec_aidx_PB[aidx]
-                    # Convert scores to ranks
-                    ranks = np.zeros(shape=(3, no_artists), dtype=np.int32)         # init rank matrix
-                    for m in range(0, scores.shape[0]):                             # for all methods to fuse
-                        aidx_nz = np.nonzero(scores[m])[0]                          # identify artists with positive scores
-                        scores_sorted_idx = np.argsort(scores[m,aidx_nz])           # sort artists with positive scores according to their score
-                        # Insert votes (i.e., inverse ranks) for each artist and current method
-                        for a in range(0, len(scores_sorted_idx)):
-                            ranks[m, aidx_nz[scores_sorted_idx[a]]] = a + 1
-                    # Sum ranks over different approaches
-                    ranks_fused = np.sum(ranks, axis=0)
-                    # Sort and select top K_HR artists to recommend
-                    sorted_idx = np.argsort(ranks_fused)
-                    sorted_idx_top = sorted_idx[-MAX_ARTISTS:]
-                    # Put (artist index, score) pairs of highest scoring artists in a dictionary
-                    dict_rec_aidx = {}
-                    for i in range(0, len(sorted_idx_top)):
-                        dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
-
-                # Distill recommended artist indices from dictionary returned by the recommendation functions
-                rec_aidx = dict_rec_aidx.keys()
-
-                # print "Recommended items: ", len(rec_aidx)
-
-                # Compute performance measures
-                correct_aidx = np.intersect1d(test_aidx, rec_aidx)          # correctly predicted artists
-                # True Positives is amount of overlap in recommended artists and test artists
-                TP = len(correct_aidx)
-                # False Positives is recommended artists minus correctly predicted ones
-                FP = len(np.setdiff1d(rec_aidx, correct_aidx))
-                # Precision is percentage of correctly predicted among predicted
-                if len(rec_aidx) == 0:      # if we cannot predict a single artist -> precision is defined as 1 (we don't make wrong predictions)
-                    prec = 100.0
-                else:               # compute precision
-                    prec = 100.0 * TP / len(rec_aidx)
-                # Recall is percentage of correctly predicted among all listened to
-                rec = 100.0 * TP / len(test_aidx)
-
-
-                # add precision and recall for current user and fold to aggregate variables
-                avg_prec += prec / (NF * no_users)
-                avg_rec += rec / (NF * no_users)
-
-                # Output precision and recall of current fold
-                # print ("\tPrecision: %.2f, Recall:  %.2f" % (prec, rec))
-
-                # Increase fold counter
-                fold += 1
-
-        t1 = time()
-        pastedTime = t1 - t0
-
-        # Output mean average precision and recall
-        print str(MAX_ARTISTS) + "/" + str(K) + ": MAP %.2f" % avg_prec + " MAR %.2f" % avg_rec + " Time %.2f" % pastedTime
-
-        with open(filename, "a") as myfile:
-            myfile.write(str(K) + "\t" + str(MAX_ARTISTS) + "\t" + "%.2f" % avg_prec + "\t" + "%.2f" % avg_rec + "\t" + "%.2f" % pastedTime + "\n")
-
-        MAX_ARTISTS += 5
-
-    print "FINISHED"
-
-
+                p = Process(target=run, args=(artists, users, UAM, UUM, AAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
+                processes += [p]
+                p.start()
+                if len(processes) % 1 == 0:
+                    for x in processes:
+                        x.join()
+                    processes = []
+                MAX_ARTISTS += 5
+    except Exception,e:
+        print str(e)

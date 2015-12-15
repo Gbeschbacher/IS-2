@@ -117,4 +117,4 @@ if __name__ == "__main__":
             uum[j, i] = 1 - dissimilarity
     # GENDER AND WEIGHTING
 
-    np.savetxt("asdf.txt", uum, fmt="%0.6f", delimiter="\t", newline="\n")
+    np.savetxt("../data/overall/UUM.csv", uum, fmt="%0.6f", delimiter="\t", newline="\n")
