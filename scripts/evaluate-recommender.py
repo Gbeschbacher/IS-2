@@ -291,6 +291,9 @@ def recommend_CB(AAM, seed_aidx_train, K, max_artists):
 
     # Get nearest neighbors of train set artist of seed user
     # Sort AAM column-wise for each row
+            
+    seed_aidx_train[:] = [x for x in seed_aidx_train if not x == 10121]
+    
     sort_idx = np.argsort(AAM[seed_aidx_train,:], axis=1)
 
     recommended_artists_indices = {}
@@ -415,7 +418,7 @@ if __name__ == '__main__':
     no_users = UAM.shape[0]
     no_artists = UAM.shape[1]
 
-    METHOD = "HR_UBCF_SB"                       # recommendation method
+    METHOD = "HR_CBUBCFPB_SB"                       # recommendation method
     # RB
     # CF _k, _artists, _artists_k
     # CB _k, _artists, _artists_k
@@ -443,6 +446,8 @@ if __name__ == '__main__':
     filename = foldername + str(METHOD) + "_k.txt"
     with open(filename, "w") as myfile:
             myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
+            
+    print [(index, row.index(10121)) for index, row in enumerate(UAM) if 10121 in row]
 
     while(MAX_ARTISTS <= 40):
         # Initialize variables to hold performance measures
