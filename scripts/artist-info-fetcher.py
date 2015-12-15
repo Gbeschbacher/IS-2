@@ -54,9 +54,8 @@ if __name__ == '__main__':
     helpers.createPath(pathToArtistInfo)
 
     artists = helpers.readFile(pathToUniqueArtists, True, 1)
-    print artists
-	
-    for i in range(1, len(artists)):
+
+    for i in range(0, len(artists)):
         print "Fetching artist " + str(i)
         htmlFn = pathToArtistInfo + str(i) + ".html"
         if os.path.exists(htmlFn):

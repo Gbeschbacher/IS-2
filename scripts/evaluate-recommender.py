@@ -292,6 +292,9 @@ def recommend_CB(AAM, seed_aidx_train, K, max_artists):
 
     # Get nearest neighbors of train set artist of seed user
     # Sort AAM column-wise for each row
+
+    seed_aidx_train[:] = [x for x in seed_aidx_train if not x == 10121]
+
     sort_idx = np.argsort(AAM[seed_aidx_train,:], axis=1)
 
     recommended_artists_indices = {}
@@ -777,6 +780,7 @@ if __name__ == '__main__':
     # For all users in our data (UAM)
     no_users = UAM.shape[0]
     no_artists = UAM.shape[1]
+
 
     # RB
     # CF _k, _artists, _artists_k
