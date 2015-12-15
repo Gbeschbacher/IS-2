@@ -797,15 +797,15 @@ if __name__ == '__main__':
     try:
         for METHOD in ["RBU"]:
             MAX_ARTISTS = 10
+            foldername = "./results/"
+            if not os.path.exists(foldername):
+                os.makedirs(foldername)
+
+            filename = foldername + str(METHOD) + "_k.txt"
+            with open(filename, "w") as myfile:
+                myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
             while(MAX_ARTISTS <= 40):
 
-                foldername = "./results/"
-                if not os.path.exists(foldername):
-                    os.makedirs(foldername)
-
-                filename = foldername + str(METHOD) + "_k.txt"
-                with open(filename, "w") as myfile:
-                    myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
 
                 print "Starting " + METHOD + " with " + str(MAX_ARTISTS) + " artists"
 
