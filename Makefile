@@ -16,7 +16,7 @@ MINIMUM_USERS = 10
 
 UNIQUE_USERS = "./data/overall/unique_users_2000.csv"
 LISTENING_EVENTS_F = "./data/overall/listening_events_898767.csv"
-UAM_ARTISTS = "./data/overall/UAM_artists.csv"
+UAM_ARTISTS = "./data/overall/C1ku_artists_extended.csv"
 UAM_USERS = "./data/overall/UAM_users.csv"
 UAM = "./data/overall/UAM.csv"
 AAM = "./data/overall/AAM.csv"
@@ -47,19 +47,19 @@ artist-info:
 
 web-similarity:
 	python $(WEB_SIMILARITY) $(ARTISTS) $(UAM_ARTISTS) $(OVERALL)
-    
+
 recommender-hybrid:
 	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(HYBRID)
 
 recommender-CF:
 	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(CF)
-    
+
 recommender-CB:
 	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(CB)
-    
+
 recommender-RB:
 	python $(EVAL_RECOMMENDER) $(UAM) $(AAM) $(UAM_ARTISTS) $(UAM_USERS) $(RB)
-    
+
 clean.users:
 	rm -rf ./$(USERS)
 
