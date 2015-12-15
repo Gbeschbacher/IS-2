@@ -385,14 +385,15 @@ def recommend_RBU(artists_idx, no_items, UAM):
 
     u_aidx = np.nonzero(UAM[random_user, :])[0]
 
-    if(len(u_aidx) < no_items) :
-        no_items = len(u_aidx)
+    #select only those indices that are not in the users training set
+    random_aidx = set(u_aidx) - set(artists_idx)
+
+    if(len(random_aidx) < no_items) :
+        no_items = len(random_aidx)
 
     # Let's predict a number of random items from the randomly selected users playlist
     random_aidx = random.sample(u_aidx, no_items)
 
-    #select only those indices that are not in the users training set
-    random_aidx = set(random_aidx) - set(artists_idx)
     # Insert scores into dictionary
     dict_random_aidx = {}
     for aidx in random_aidx:
@@ -403,14 +404,9 @@ def recommend_RBU(artists_idx, no_items, UAM):
 
 
 
-def run(artists, users, UAM, UUM, METHOD, K, MAX_ARTISTS):
+def run(artists, users, UAM, no_users, no_artists, METHOD, K, MAX_ARTISTS):
     foldername = "./results/"
-    if not os.path.exists(foldername):
-        os.makedirs(foldername)
-
     filename = foldername + str(METHOD) + "_k.txt"
-    with open(filename, "w") as myfile:
-            myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
 
     # Initialize variables to hold performance measures
     avg_prec = 0;       # mean precision
@@ -444,7 +440,6 @@ def run(artists, users, UAM, UUM, METHOD, K, MAX_ARTISTS):
             # NB: u_aidx[train_aidx] gives the indices of training artists
             rec_aidx = {}   # use a dictionary to store (similarity) scores along recommended artist indices (in contrast to Evaluate_Recommender.py)
 
-            print "Searching " + METHOD
             if METHOD == "RB":          # random baseline
                 dict_rec_aidx = recommend_RB(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS) # len(test_aidx))
             if METHOD == "RBU":          # random baseline
@@ -717,8 +712,6 @@ def run(artists, users, UAM, UUM, METHOD, K, MAX_ARTISTS):
                 for i in range(0, len(sorted_idx_top)):
                     dict_rec_aidx[sorted_idx_top[i]] = ranks_fused[sorted_idx_top[i]]
 
-            print METHOD + " finished; calculating stats"
-
             # Distill recommended artist indices from dictionary returned by the recommendation functions
             rec_aidx = dict_rec_aidx.keys()
 
@@ -758,7 +751,6 @@ def run(artists, users, UAM, UUM, METHOD, K, MAX_ARTISTS):
     with open(filename, "a") as myfile:
         myfile.write(str(K) + "\t" + str(MAX_ARTISTS) + "\t" + "%.2f" % avg_prec + "\t" + "%.2f" % avg_rec + "\t" + "%.2f" % pastedTime + "\n")
 
-
     print "FINISHED"
 
 
@@ -773,9 +765,9 @@ if __name__ == '__main__':
     # Load UAM
     UAM = np.loadtxt(UAM_FILE, delimiter='\t', dtype=np.float32)
     # Load AAM
-    AAM = np.loadtxt(AAM_FILE, delimiter='\t', dtype=np.float32)
+    # AAM = np.loadtxt(AAM_FILE, delimiter='\t', dtype=np.float32)
     # Load UUM
-    UUM = np.loadtxt(UUM_FILE, delimiter='\t', dtype=np.float32)
+    # UUM = np.loadtxt(UUM_FILE, delimiter='\t', dtype=np.float32)
 
     # For all users in our data (UAM)
     no_users = UAM.shape[0]
@@ -803,16 +795,25 @@ if __name__ == '__main__':
     MAX_ARTISTS = 10          # for hybrid: number of artists to recommend at most
 
     try:
-        for METHOD in ["CB", "HR_CBCF_SB", "HR_CBPB_SB", "HR_CBUBCF_SB", "HR_CBUBCFPB_SB", "HR_CBPB_RB", "HR_CBCF_RB", "HR_CBCFPB_RB"]:
+        for METHOD in ["RBU"]:
             MAX_ARTISTS = 10
             while(MAX_ARTISTS <= 40):
 
+                foldername = "./results/"
+                if not os.path.exists(foldername):
+                    os.makedirs(foldername)
+
+                filename = foldername + str(METHOD) + "_k.txt"
+                with open(filename, "w") as myfile:
+                    myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
+
                 print "Starting " + METHOD + " with " + str(MAX_ARTISTS) + " artists"
 
-                p = Process(target=run, args=(artists, users, UAM, UUM, AAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
+                # p = Process(target=run, args=(artists, users, UAM, UUM, AAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
+                p = Process(target=run, args=(artists, users, UAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
                 processes += [p]
                 p.start()
-                if len(processes) % 1 == 0:
+                if len(processes) % 6 == 0:
                     for x in processes:
                         x.join()
                     processes = []
