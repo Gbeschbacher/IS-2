@@ -293,9 +293,9 @@ def recommend_CB(AAM, seed_aidx_train, K, max_artists):
     # Get nearest neighbors of train set artist of seed user
     # Sort AAM column-wise for each row
 
-    seed_aidx_train[:] = [x for x in seed_aidx_train if not x == 10121]
+    aidx_train = [x for x in seed_aidx_train if not x == 10121]
 
-    sort_idx = np.argsort(AAM[seed_aidx_train,:], axis=1)
+    sort_idx = np.argsort(AAM[aidx_train,:], axis=1)
 
     recommended_artists_indices = {}
     while(True):
@@ -306,9 +306,9 @@ def recommend_CB(AAM, seed_aidx_train, K, max_artists):
         dict_recommended_artists_idx = {}           # dictionry to hold recommended artists and corresponding scores
 
         # Distill corresponding similarity scores and store in sims_neighbors_idx
-        sims_neighbors_idx = np.zeros(shape=(len(seed_aidx_train), K), dtype=np.float32)
+        sims_neighbors_idx = np.zeros(shape=(len(aidx_train), K), dtype=np.float32)
         for i in range(0, neighbor_idx.shape[0]): # 0 = y-axis. 1 = x-axis
-            sims_neighbors_idx[i] = AAM[seed_aidx_train[i], neighbor_idx[i]]
+            sims_neighbors_idx[i] = AAM[aidx_train[i], neighbor_idx[i]]
 
         # Aggregate the artists in neighbor_idx.
         # To this end, we compute their average similarity to the seed artists
@@ -331,7 +331,7 @@ def recommend_CB(AAM, seed_aidx_train, K, max_artists):
         #########################################
 
         # Remove all artists that are in the training set of seed user
-        for aidx in seed_aidx_train:
+        for aidx in aidx_train:
             dict_recommended_artists_idx.pop(aidx, None)            # drop (key, value) from dictionary if key (i.e., aidx) exists; otherwise return None
 
         # normalize similarity values in dict_recommended_artists_idx
@@ -377,13 +377,22 @@ def recommend_RB(artists_idx, no_items):
 
 	# Function that implements a dumb random recommender. It predicts a number of randomly chosen items.
 # It returns a dictionary of recommended artist indices (and corresponding scores).
-def recommend_RBU(artists_idx, no_items, UAM):
+def recommend_RBU(artists_idx, no_items, UAM, user):
     # artists_idx           list of artist indices in the training set
     # no_items              no of items to predict
 
-    random_user = random.randint(0,UAM.shape[0]-1)
+    users = range(UAM.shape[0]) 
+    users.remove(user)
+    
+    print user
+    
+    random_user = random.sample(users, 1)
 
-    u_aidx = np.nonzero(UAM[random_user, :])[0]
+    print random_user
+    
+    u_aidx = np.nonzero(UAM[random_user[0], :])[0]
+    
+    print u_aidx
 
     #select only those indices that are not in the users training set
     random_aidx = set(u_aidx) - set(artists_idx)
@@ -404,7 +413,7 @@ def recommend_RBU(artists_idx, no_items, UAM):
 
 
 
-def run(artists, users, UAM, no_users, no_artists, METHOD, K, MAX_ARTISTS):
+def run(artists, users, UAM, UUM, AAM, no_users, no_artists, METHOD, K, MAX_ARTISTS):
     foldername = "./results/"
     filename = foldername + str(METHOD) + "_k.txt"
 
@@ -443,7 +452,7 @@ def run(artists, users, UAM, no_users, no_artists, METHOD, K, MAX_ARTISTS):
             if METHOD == "RB":          # random baseline
                 dict_rec_aidx = recommend_RB(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS) # len(test_aidx))
             if METHOD == "RBU":          # random baseline
-                dict_rec_aidx = recommend_RBU(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS, UAM) # len(test_aidx))
+                dict_rec_aidx = recommend_RBU(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS, copy_UAM, u) # len(test_aidx))
             elif METHOD == "CF":        # collaborative filtering
                 dict_rec_aidx = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
             elif METHOD == "UB":
@@ -765,9 +774,9 @@ if __name__ == '__main__':
     # Load UAM
     UAM = np.loadtxt(UAM_FILE, delimiter='\t', dtype=np.float32)
     # Load AAM
-    # AAM = np.loadtxt(AAM_FILE, delimiter='\t', dtype=np.float32)
+    AAM = np.loadtxt(AAM_FILE, delimiter='\t', dtype=np.float32)
     # Load UUM
-    # UUM = np.loadtxt(UUM_FILE, delimiter='\t', dtype=np.float32)
+    UUM = np.loadtxt(UUM_FILE, delimiter='\t', dtype=np.float32)
 
     # For all users in our data (UAM)
     no_users = UAM.shape[0]
@@ -809,11 +818,11 @@ if __name__ == '__main__':
 
                 print "Starting " + METHOD + " with " + str(MAX_ARTISTS) + " artists"
 
-                # p = Process(target=run, args=(artists, users, UAM, UUM, AAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
-                p = Process(target=run, args=(artists, users, UAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
+                p = Process(target=run, args=(artists, users, UAM, UUM, AAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
+                #sp = Process(target=run, args=(artists, users, UAM, no_users, no_artists, METHOD, K, MAX_ARTISTS))
                 processes += [p]
                 p.start()
-                if len(processes) % 6 == 0:
+                if len(processes) % 3 == 0:
                     for x in processes:
                         x.join()
                     processes = []

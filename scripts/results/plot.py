@@ -13,9 +13,6 @@ from textwrap import wrap
 # We need a special font for the code below.  It can be downloaded this way:
 import os
 import urllib2
-if not os.path.exists('Humor-Sans.ttf'):
-    fhandle = urllib2.urlopen('http://antiyawn.com/uploads/Humor-Sans-1.0.ttf')
-    open('Humor-Sans.ttf', 'wb').write(fhandle.read())
 
 
 # Function to read metadata (users or artists)
@@ -23,7 +20,7 @@ def read_from_file(filename):
     data = []
     with open(filename, 'r') as f:  # open file for reading
         reader = csv.reader(f, delimiter=',')  # create reader
-        headers = reader.next()  # skip header
+        #headers = reader.next()  # skip header
         for row in reader:
             item = row
             data.append(item)
@@ -46,8 +43,8 @@ def makePlot(xAxes, yAxes, lineLabels, xLabel, yLabel, title) :
 
     ax.legend(loc='best')
     
-    ax.set_xlim(float(xAxes.min() -0.5), float(xAxes.max()) + 0.5)
-    ax.set_ylim(float(yAxes.min() -0.5), float(yAxes.max()) + 0.5)
+    #ax.set_xlim(float(xAxes.min() -0.5), float(xAxes.max()) + 0.5)
+    #ax.set_ylim(float(yAxes.min() -0.5), float(yAxes.max()) + 0.5)
     
     plt.savefig(tempTitle + ".png")
     plt.clf()
@@ -55,16 +52,35 @@ def makePlot(xAxes, yAxes, lineLabels, xLabel, yLabel, title) :
 if __name__ == "__main__":
     np.random.seed(0)
     
-    fileName = str(sys.argv[1])
-    data = np.genfromtxt(fileName, delimiter='\t', skip_header=1)
+    fileName = "CF_k.csv"
+    data = np.genfromtxt(fileName, delimiter='\t', skip_header=0)
     
-    print data
+    fileName = "UB_k.csv"
+    data2 = np.genfromtxt(fileName, delimiter='\t', skip_header=0)
     
-    lineLabels = ["CF"]
+    fileName = "RB_k.csv"
+    data3 = np.genfromtxt(fileName, delimiter='\t', skip_header=0)
     
-    yAxes = data[:,2]
-    xAxes = data[:,3]
+    fileName = "RBU_k.csv"
+    data4 = np.genfromtxt(fileName, delimiter='\t', skip_header=0)
     
-    makePlot(xAxes, yAxes, lineLabels, "MAR", "MAP", "CF")
+    fileName = "CB_k.csv"
+    data5 = np.genfromtxt(fileName, delimiter='\t', skip_header=0)
     
+    fileName = "PB_k.csv"
+    data6 = np.genfromtxt(fileName, delimiter='\t', skip_header=0)
     
+    fileName = "UBCF_k.csv"
+    data7 = np.genfromtxt(fileName, delimiter='\t', skip_header=0)
+    
+    lineLabels = ["CF", "UB", "RB", "RBU", "CB", "PB", "UBCF"]
+    
+    yAxes = [data[:,2], data2[:,2], data3[:,2], data4[:,2], data5[:,2], data6[:,2], data7[:,2]]
+    xAxes = [data[:,3], data2[:,3], data3[:,3], data4[:,3], data5[:,3], data6[:,3], data7[:,3]]
+    
+    makePlot(xAxes, yAxes, lineLabels, "Mean Average Recall (%)", "Mean Average Precision (%)", "Precision Recall Plot of various Recommenders (recommended Artists from 10-40 in steps of five)")
+    
+    xAxes = [data[:,1], data[:,1], data[:,1], data[:,1], data[:,1], data[:,1], data[:,1]]
+    yAxes = [data[:,4], data2[:,4], data3[:,4], data4[:,4], data5[:,4], data6[:,4], data7[:,4]]
+    
+    makePlot(xAxes, yAxes, lineLabels, "Number of Recommended Artists", "F1Score", "F1Score over number of artists recommended")
