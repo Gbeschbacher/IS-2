@@ -380,33 +380,19 @@ def recommend_RB(artists_idx, no_items):
 def recommend_RBU(artists_idx, no_items, UAM, user):
     # artists_idx           list of artist indices in the training set
     # no_items              no of items to predict
-
-    users = range(UAM.shape[0]) 
-    users.remove(user)
     
-    print user
+    random_uidx = random.sample(np.setdiff1d(range(0, UAM.shape[0]), [user]), 10)
     
-    random_user = random.sample(users, 1)
+    listened = []
+    for uidx in random_uidx:
+      listened.extend(np.nonzero(UAM[random_uidx, :])[0])
 
-    print random_user
+    listened = np.setdiff1d(list(set(listened)), artists_idx)
     
-    u_aidx = np.nonzero(UAM[random_user[0], :])[0]
-    
-    print u_aidx
-
-    #select only those indices that are not in the users training set
-    random_aidx = set(u_aidx) - set(artists_idx)
-
-    if(len(random_aidx) < no_items) :
-        no_items = len(random_aidx)
-
-    # Let's predict a number of random items from the randomly selected users playlist
-    random_aidx = random.sample(u_aidx, no_items)
-
-    # Insert scores into dictionary
     dict_random_aidx = {}
-    for aidx in random_aidx:
+    for aidx in random.sample(listened, min(len(listened), no_items)):
         dict_random_aidx[aidx] = 1.0            # for random recommendations, all scores are equal
+            
 
     # Return dict of recommended artist indices as keys (and scores as values)
     return dict_random_aidx
@@ -452,7 +438,7 @@ def run(artists, users, UAM, UUM, AAM, no_users, no_artists, METHOD, K, MAX_ARTI
             if METHOD == "RB":          # random baseline
                 dict_rec_aidx = recommend_RB(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS) # len(test_aidx))
             if METHOD == "RBU":          # random baseline
-                dict_rec_aidx = recommend_RBU(np.setdiff1d(range(0, no_artists), train_aidx), MAX_ARTISTS, copy_UAM, u) # len(test_aidx))
+                dict_rec_aidx = recommend_RBU(train_aidx, MAX_ARTISTS, copy_UAM, u) # len(test_aidx))
             elif METHOD == "CF":        # collaborative filtering
                 dict_rec_aidx = recommend_CF(copy_UAM, u, train_aidx, test_aidx, K, MAX_ARTISTS)
             elif METHOD == "UB":
