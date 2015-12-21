@@ -789,7 +789,6 @@ if __name__ == '__main__':
     # HR_CBPB_RB _k, _artists, _artists_k
 
     K = 10           # for CB: number of nearest neighbors to consider for each artist in seed user's training set
-    MAX_ARTISTS = 0          # for hybrid: number of artists to recommend at most
 
     try:
         for METHOD in ["RB", "RBU", "CF", "UB", "UBCF", "CB", "PB", "HR_CBCF_SB", "HR_UBCF_SB", "HR_CBPB_SB", "HR_CBUBCF_SB", "HR_CBUBCFPB_SB", "HR_CBPB_RB", "HR_UBCF_RB", "HR_CBCF_RB", "HR_CBCFPB_RB"]:
