@@ -768,7 +768,9 @@ if __name__ == '__main__':
     no_users = UAM.shape[0]
     no_artists = UAM.shape[1]
 
-
+    
+    no_artists_rec = [1,2,3,5,8,13,21,34,55,89,144]
+    
     # RB
     # CF _k, _artists, _artists_k
     # CB _k, _artists, _artists_k
@@ -787,11 +789,11 @@ if __name__ == '__main__':
     # HR_CBPB_RB _k, _artists, _artists_k
 
     K = 10           # for CB: number of nearest neighbors to consider for each artist in seed user's training set
-    MAX_ARTISTS = 10          # for hybrid: number of artists to recommend at most
+    MAX_ARTISTS = 0          # for hybrid: number of artists to recommend at most
 
     try:
-        for METHOD in ["RBU"]:
-            MAX_ARTISTS = 10
+        for METHOD in ["RB", "RBU", "CF", "UB", "UBCF", "CB", "PB", "HR_CBCF_SB", "HR_UBCF_SB", "HR_CBPB_SB", "HR_CBUBCF_SB", "HR_CBUBCFPB_SB", "HR_CBPB_RB", "HR_UBCF_RB", "HR_CBCF_RB", "HR_CBCFPB_RB"]:
+            MAX_ARTISTS = 0
             foldername = "./results/"
             if not os.path.exists(foldername):
                 os.makedirs(foldername)
@@ -799,8 +801,7 @@ if __name__ == '__main__':
             filename = foldername + str(METHOD) + "_k.txt"
             with open(filename, "w") as myfile:
                 myfile.write("K" + "\tArtists" + "\tPrec" + "\tRec" + "\tel. Time" + "\n")
-            while(MAX_ARTISTS <= 40):
-
+            for MAX_ARTISTS in no_artists_rec:
 
                 print "Starting " + METHOD + " with " + str(MAX_ARTISTS) + " artists"
 
@@ -812,6 +813,5 @@ if __name__ == '__main__':
                     for x in processes:
                         x.join()
                     processes = []
-                MAX_ARTISTS += 5
     except Exception,e:
         print str(e)
