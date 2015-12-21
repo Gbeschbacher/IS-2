@@ -89,11 +89,12 @@ if __name__ == "__main__":
     #AGE
 
     # GENDER AND WEIGHTING
+    usedGender = ["m", "f", "n"]
     uum = np.zeros(shape=(userCount, userCount), dtype=np.float32)
     for i, userOutside in enumerate(data):
 
         u = data[userOutside]
-        genderUserOutside = "n"
+        genderUserOutside = "x"
 
         if u[4]:
             genderUserOutside = u[4]
@@ -103,16 +104,19 @@ if __name__ == "__main__":
                 break
 
             u = data[userInside]
-            genderUserInside = "n"
+            genderUserInside = "x"
 
             if u[4]:
                 genderUserInside = u[4]
 
-            dist = 1
-
-            if genderUserInside == genderUserOutside:
-                dist = 0
-            dissimilarity = uumAge[i, j] * 0.33 + uumDistance[i, j] * 0.33 + dist * 0.33
+            if genderUserInside in usedGender and genderUserOutside in usedGender:
+                dist = 1
+            
+                if genderUserInside == genderUserOutside:
+                    dist = 0
+                
+                dissimilarity = uumAge[i, j] * 0.33 + uumDistance[i, j] * 0.33 + dist * 0.33
+            dissimilarity = uumAge[i, j] * 0.33 + uumDistance[i, j] * 0.33
             uum[i, j] = 1 - dissimilarity
             uum[j, i] = 1 - dissimilarity
     # GENDER AND WEIGHTING
